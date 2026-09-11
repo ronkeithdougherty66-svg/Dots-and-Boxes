@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dots & Boxes</title>
+<meta name="description" content="A two-player pass-and-play Dots and Boxes game.">
+<meta name="theme-color" content="#2b2a26">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dots & Boxes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #fbfaf5;
+    --rule: #cddaea;
+    --margin: #e3b3b8;
+    --graphite: #55524a;
+    --ink-dark: #2b2a26;
+    --p1: #4a85ef;
+    --p1-tint: #e1ebfc;
+    --p2: #7c3aed;
+    --p2-tint: #e8ddfb;
+    --paper-edge: #eae5d6;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #e9e4d5;
+    font-family: 'Inter', sans-serif;
+    color: var(--ink-dark);
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 18px 12px 28px;
+  }
+
+  .title {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 40px;
+    color: var(--ink-dark);
+    margin: 2px 0 0;
+    line-height: 1;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    color: #8a8578;
+    margin: 4px 0 16px;
+    letter-spacing: 0.02em;
+  }
+
+  .scoreboard {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .player-card {
+    flex: 1;
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--paper-edge);
+    position: relative;
+    transition: transform 0.15s ease;
+  }
+
+  .player-card.p1 { border-left: 4px solid var(--p1); }
+  .player-card.p2 { border-right: 4px solid var(--p2); text-align: right; }
+
+  .player-card.active { transform: translateY(-2px); }
+  .player-card.active.p1 { box-shadow: 0 3px 0 var(--p1); }
+  .player-card.active.p2 { box-shadow: 0 3px 0 var(--p2); }
+
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .player-card.p2 .name-row { justify-content: flex-end; }
+
+  .player-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--graphite);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed transparent;
+    width: 100%;
+    min-width: 0;
+    font-family: inherit;
+    padding: 0;
+  }
+  .player-card.p2 .player-name { text-align: right; }
+  .player-name:focus { outline: none; border-bottom: 1px dashed #b8b2a1; }
+
+  .player-initial {
+    flex: none;
+    width: 30px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--paper-edge);
+    border-radius: 4px;
+    padding: 2px 0;
+  }
+  .player-initial:focus { outline: none; }
+  .player-card.p1 .player-initial { border-color: var(--p1); color: var(--p1); }
+  .player-card.p2 .player-initial { border-color: var(--p2); color: var(--p2); }
+
+  .player-score {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 1.1;
+  }
+  .player-card.p1 .player-score { color: var(--p1); }
+  .player-card.p2 .player-score { color: var(--p2); }
+
+  .turn-flag {
+    font-size: 11px;
+    color: #9a9587;
+    height: 14px;
+    margin-top: 2px;
+  }
+  .player-card.active .turn-flag { color: inherit; font-weight: 600; }
+
+  .board-wrap {
+    background: var(--paper);
+    border-radius: 6px;
+    padding: 14px;
+    border: 1px solid var(--paper-edge);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+    position: relative;
+    touch-action: none;
+  }
+
+  svg { display: block; touch-action: none; }
+
+  .hit {
+    fill: transparent;
+    cursor: pointer;
+  }
+  .hit:hover { fill: rgba(0,0,0,0.03); }
+
+  .edge-ghost {
+    stroke: #d7d2c2;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .edge-line {
+    stroke-linecap: round;
+    fill: none;
+  }
+  .edge-line.new {
+    animation: draw-in 0.18s ease-out;
+  }
+  @keyframes draw-in {
+    from { stroke-width: 1; opacity: 0.3; }
+    to { stroke-width: 8; opacity: 1; }
+  }
+
+  .dot { fill: var(--graphite); transition: r 0.1s ease; }
+
+  .dot-hit {
+    fill: transparent;
+    cursor: pointer;
+  }
+
+  .dot-select-ring {
+    fill: none;
+    stroke-width: 4;
+    animation: pulse-ring 1s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+
+  .box-fill { transition: opacity 0.25s ease; }
+  .box-fill.pop { animation: pop-in 0.22s ease-out; }
+  @keyframes pop-in {
+    0% { transform: scale(0.5); opacity: 0; }
+    70% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .box-initial {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .controls {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .size-group {
+    display: flex;
+    background: var(--paper);
+    border: 1px solid var(--paper-edge);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .size-btn {
+    border: none;
+    background: transparent;
+    padding: 7px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8a8578;
+    cursor: pointer;
+  }
+  .size-btn.selected {
+    background: var(--ink-dark);
+    color: var(--paper);
+  }
+
+  .new-game-btn {
+    background: var(--ink-dark);
+    color: var(--paper);
+    border: none;
+    padding: 9px 16px;
+    border-radius: 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .new-game-btn:active { transform: translateY(1px); }
+
+  .toast {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: var(--ink-dark);
+    color: var(--paper);
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 18, 14, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 30;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+
+  .win-note {
+    background: var(--paper);
+    border-radius: 6px;
+    padding: 28px 26px;
+    max-width: 300px;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.25s ease;
+  }
+  .overlay.show .win-note { transform: scale(1); }
+
+  .win-note .headline {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 34px;
+    margin: 0 0 4px;
+  }
+  .win-note .detail {
+    font-size: 14px;
+    color: var(--graphite);
+    margin: 0 0 18px;
+  }
+  .win-note button {
+    background: var(--ink-dark);
+    color: var(--paper);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+  <h1 class="title">Dots &amp; Boxes</h1>
+  <p class="subtitle">tap a dot, then tap the next one to connect them</p>
+
+  <div class="scoreboard">
+    <div class="player-card p1" id="card1">
+      <div class="name-row">
+        <input class="player-name" id="name1" value="Player 1" maxlength="12">
+        <input class="player-initial" id="initial1" value="P1" maxlength="2">
+      </div>
+      <div class="player-score" id="score1">0</div>
+      <div class="turn-flag" id="flag1">your turn</div>
+    </div>
+    <div class="player-card p2" id="card2">
+      <div class="name-row">
+        <input class="player-initial" id="initial2" value="P2" maxlength="2">
+        <input class="player-name" id="name2" value="Player 2" maxlength="12">
+      </div>
+      <div class="player-score" id="score2">0</div>
+      <div class="turn-flag" id="flag2">&nbsp;</div>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <svg id="board"></svg>
+  </div>
+
+  <div class="controls">
+    <div class="size-group" id="sizeGroup">
+      <button class="size-btn" data-size="6">Quick</button>
+      <button class="size-btn" data-size="9">Classic</button>
+      <button class="size-btn selected" data-size="11">Full</button>
+    </div>
+    <button class="new-game-btn" id="newGameBtn">New game</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="win-note">
+      <p class="headline" id="winHeadline">Player 1 wins!</p>
+      <p class="detail" id="winDetail">7 boxes to 3</p>
+      <button id="playAgainBtn">Play again</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const svg = document.getElementById('board');
+  const toastEl = document.getElementById('toast');
+  const overlay = document.getElementById('overlay');
+  const cards = [document.getElementById('card1'), document.getElementById('card2')];
+  const flags = [document.getElementById('flag1'), document.getElementById('flag2')];
+  const scoreEls = [document.getElementById('score1'), document.getElementById('score2')];
+  const nameInputs = [document.getElementById('name1'), document.getElementById('name2')];
+  const initialInputs = [document.getElementById('initial1'), document.getElementById('initial2')];
+  const playerColors = ['#4a85ef', '#7c3aed'];
+  const playerTints = ['#e1ebfc', '#e8ddfb'];
+
+  let dots = 11;          // dots per side
+  let boxesPerSide = dots - 1;
+  let hEdges, vEdges;      // drawn state
+  let boxOwner;            // owner per box, -1 = unclaimed
+  let current = 0;         // 0 or 1
+  let scores = [0, 0];
+  let gameOver = false;
+  let toastTimer = null;
+  let selectedDot = null; // { r, c } of the first tapped dot, or null
+  let audioCtx = null;
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playBoxSound(comboCount) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const notes = comboCount > 1 ? [523.25, 659.25, 783.99] : [523.25, 659.25]; // C5-E5(-G5)
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = now + i * 0.07;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.16, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.3);
+    });
+  }
+
+  const NS = 'http://www.w3.org/2000/svg';
+
+  function names() {
+    return [nameInputs[0].value.trim() || 'Player 1', nameInputs[1].value.trim() || 'Player 2'];
+  }
+
+  function initials() {
+    const nm = names();
+    return [0, 1].map((i) => {
+      const raw = initialInputs[i].value.trim();
+      return (raw || nm[i].charAt(0) || '?').toUpperCase();
+    });
+  }
+
+  function initState() {
+    boxesPerSide = dots - 1;
+    hEdges = Array.from({ length: dots }, () => Array(boxesPerSide).fill(false));
+    vEdges = Array.from({ length: boxesPerSide }, () => Array(dots).fill(false));
+    boxOwner = Array.from({ length: boxesPerSide }, () => Array(boxesPerSide).fill(-1));
+    current = 0;
+    scores = [0, 0];
+    gameOver = false;
+    selectedDot = null;
+    overlay.classList.remove('show');
+    updateScoreboard();
+    render();
+  }
+
+  function cellSize() {
+    const maxWidth = Math.min(window.innerWidth - 56, 460);
+    const size = Math.floor(maxWidth / boxesPerSide);
+    return Math.max(20, Math.min(48, size));
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    const cs = cellSize();
+    const pad = 10;
+    const w = pad * 2 + cs * boxesPerSide;
+    const h = w;
+    svg.setAttribute('width', w);
+    svg.setAttribute('height', h);
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+    const gx = (c) => pad + c * cs;
+    const gy = (r) => pad + r * cs;
+
+    // boxes (filled first, under the lines)
+    for (let r = 0; r < boxesPerSide; r++) {
+      for (let c = 0; c < boxesPerSide; c++) {
+        const owner = boxOwner[r][c];
+        const g = document.createElementNS(NS, 'g');
+        const rect = document.createElementNS(NS, 'rect');
+        rect.setAttribute('x', gx(c) + 3);
+        rect.setAttribute('y', gy(r) + 3);
+        rect.setAttribute('width', cs - 6);
+        rect.setAttribute('height', cs - 6);
+        rect.setAttribute('rx', 2);
+        rect.classList.add('box-fill');
+        if (owner >= 0) {
+          rect.setAttribute('fill', playerTints[owner]);
+          rect.setAttribute('opacity', '1');
+        } else {
+          rect.setAttribute('fill', 'transparent');
+        }
+        rect.dataset.r = r;
+        rect.dataset.c = c;
+        g.appendChild(rect);
+
+        if (owner >= 0) {
+          const t = document.createElementNS(NS, 'text');
+          t.classList.add('box-initial');
+          t.setAttribute('x', gx(c) + cs / 2);
+          t.setAttribute('y', gy(r) + cs / 2);
+          t.setAttribute('text-anchor', 'middle');
+          t.setAttribute('dominant-baseline', 'central');
+          t.setAttribute('font-size', Math.max(11, cs * 0.32));
+          t.setAttribute('fill', playerColors[owner]);
+          t.textContent = initials()[owner];
+          g.appendChild(t);
+        }
+        svg.appendChild(g);
+      }
+    }
+
+    // horizontal edges
+    for (let r = 0; r < dots; r++) {
+      for (let c = 0; c < boxesPerSide; c++) {
+        const x1 = gx(c), x2 = gx(c + 1), y = gy(r);
+        drawEdgeOrHit('h', r, c, x1, y, x2, y);
+      }
+    }
+
+    // vertical edges
+    for (let r = 0; r < boxesPerSide; r++) {
+      for (let c = 0; c < dots; c++) {
+        const x = gx(c), y1 = gy(r), y2 = gy(r + 1);
+        drawEdgeOrHit('v', r, c, x, y1, x, y2);
+      }
+    }
+
+    // dots on top, plus tap targets and selection ring
+    for (let r = 0; r < dots; r++) {
+      for (let c = 0; c < dots; c++) {
+        const isSelected = selectedDot && selectedDot.r === r && selectedDot.c === c;
+
+        if (isSelected) {
+          const ring = document.createElementNS(NS, 'circle');
+          ring.classList.add('dot-select-ring');
+          ring.setAttribute('cx', gx(c));
+          ring.setAttribute('cy', gy(r));
+          ring.setAttribute('r', Math.max(8, cs * 0.24));
+          ring.setAttribute('stroke', playerColors[current]);
+          svg.appendChild(ring);
+        }
+
+        const circ = document.createElementNS(NS, 'circle');
+        circ.classList.add('dot');
+        circ.setAttribute('cx', gx(c));
+        circ.setAttribute('cy', gy(r));
+        circ.setAttribute('r', isSelected ? Math.max(3, cs * 0.11) : Math.max(2, cs * 0.07));
+        if (isSelected) circ.setAttribute('fill', playerColors[current]);
+        svg.appendChild(circ);
+
+        const hit = document.createElementNS(NS, 'circle');
+        hit.classList.add('dot-hit');
+        hit.setAttribute('cx', gx(c));
+        hit.setAttribute('cy', gy(r));
+        hit.setAttribute('r', Math.max(14, cs * 0.42));
+        hit.addEventListener('click', () => onDotTap(r, c));
+        svg.appendChild(hit);
+      }
+    }
+
+    function drawEdgeOrHit(type, r, c, x1, y1, x2, y2) {
+      const drawn = type === 'h' ? hEdges[r][c] : vEdges[r][c];
+
+      if (drawn) {
+        const line = document.createElementNS(NS, 'line');
+        line.classList.add('edge-line');
+        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+        line.setAttribute('stroke-width', 8);
+        const ownerIdx = type === 'h' ? hEdgeOwners[r][c] : vEdgeOwners[r][c];
+        line.setAttribute('stroke', playerColors[ownerIdx]);
+        svg.appendChild(line);
+      } else {
+        const ghost = document.createElementNS(NS, 'line');
+        ghost.classList.add('edge-ghost');
+        ghost.setAttribute('x1', x1); ghost.setAttribute('y1', y1);
+        ghost.setAttribute('x2', x2); ghost.setAttribute('y2', y2);
+        svg.appendChild(ghost);
+      }
+    }
+  }
+
+  // track who drew each edge (for line color)
+  let hEdgeOwners, vEdgeOwners;
+
+  function resetOwnerGrids() {
+    hEdgeOwners = Array.from({ length: dots }, () => Array(boxesPerSide).fill(-1));
+    vEdgeOwners = Array.from({ length: boxesPerSide }, () => Array(dots).fill(-1));
+  }
+
+  function onDotTap(r, c) {
+    if (gameOver) return;
+
+    if (!selectedDot) {
+      selectedDot = { r, c };
+      render();
+      return;
+    }
+
+    if (selectedDot.r === r && selectedDot.c === c) {
+      selectedDot = null;
+      render();
+      return;
+    }
+
+    const dr = r - selectedDot.r;
+    const dc = c - selectedDot.c;
+    const isAdjacent = Math.abs(dr) + Math.abs(dc) === 1;
+
+    if (!isAdjacent) {
+      // not next to each other — treat this tap as picking a new first dot
+      selectedDot = { r, c };
+      render();
+      return;
+    }
+
+    let type, er, ec;
+    if (dr === 0) {
+      type = 'h';
+      er = r;
+      ec = Math.min(c, selectedDot.c);
+    } else {
+      type = 'v';
+      er = Math.min(r, selectedDot.r);
+      ec = c;
+    }
+
+    const alreadyDrawn = type === 'h' ? hEdges[er][ec] : vEdges[er][ec];
+    selectedDot = null;
+
+    if (alreadyDrawn) {
+      showToast('Already connected');
+      render();
+    } else {
+      playEdge(type, er, ec);
+    }
+  }
+
+  function playEdge(type, r, c) {
+    if (gameOver) return;
+    if (type === 'h') {
+      if (hEdges[r][c]) return;
+      hEdges[r][c] = true;
+      hEdgeOwners[r][c] = current;
+    } else {
+      if (vEdges[r][c]) return;
+      vEdges[r][c] = true;
+      vEdgeOwners[r][c] = current;
+    }
+
+    const completed = checkBoxes(type, r, c);
+
+    render();
+
+    if (completed > 0) {
+      scores[current] += completed;
+      updateScoreboard();
+      playBoxSound(completed);
+      if (completed > 1) showToast(`+${completed} boxes!`);
+      if (isBoardFull()) {
+        endGame();
+        return;
+      }
+      // same player goes again
+    } else {
+      current = 1 - current;
+      updateScoreboard();
+    }
+  }
+
+  function boxComplete(r, c) {
+    if (r < 0 || c < 0 || r >= boxesPerSide || c >= boxesPerSide) return false;
+    return hEdges[r][c] && hEdges[r + 1][c] && vEdges[r][c] && vEdges[r][c + 1];
+  }
+
+  function checkBoxes(type, r, c) {
+    let completed = 0;
+    const candidates = [];
+    if (type === 'h') {
+      candidates.push([r, c]);       // box below this edge
+      candidates.push([r - 1, c]);   // box above this edge
+    } else {
+      candidates.push([r, c]);       // box to the right
+      candidates.push([r, c - 1]);   // box to the left
+    }
+    for (const [br, bc] of candidates) {
+      if (br >= 0 && bc >= 0 && br < boxesPerSide && bc < boxesPerSide && boxOwner[br][bc] === -1) {
+        if (boxComplete(br, bc)) {
+          boxOwner[br][bc] = current;
+          completed++;
+        }
+      }
+    }
+    return completed;
+  }
+
+  function isBoardFull() {
+    for (let r = 0; r < boxesPerSide; r++)
+      for (let c = 0; c < boxesPerSide; c++)
+        if (boxOwner[r][c] === -1) return false;
+    return true;
+  }
+
+  function updateScoreboard() {
+    const nm = names();
+    scoreEls[0].textContent = scores[0];
+    scoreEls[1].textContent = scores[1];
+    cards[0].classList.toggle('active', current === 0 && !gameOver);
+    cards[1].classList.toggle('active', current === 1 && !gameOver);
+    flags[0].textContent = current === 0 && !gameOver ? 'your turn' : '\u00A0';
+    flags[1].textContent = current === 1 && !gameOver ? 'your turn' : '\u00A0';
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1100);
+  }
+
+  function endGame() {
+    gameOver = true;
+    updateScoreboard();
+    const nm = names();
+    const headline = document.getElementById('winHeadline');
+    const detail = document.getElementById('winDetail');
+    if (scores[0] === scores[1]) {
+      headline.textContent = "It's a draw!";
+    } else {
+      const winnerIdx = scores[0] > scores[1] ? 0 : 1;
+      headline.textContent = `${nm[winnerIdx]} wins!`;
+    }
+    detail.textContent = `${nm[0]}: ${scores[0]}  \u2014  ${nm[1]}: ${scores[1]}`;
+    overlay.classList.add('show');
+  }
+
+  function newGame() {
+    resetOwnerGrids();
+    initState();
+  }
+
+  // wire up controls
+  document.getElementById('newGameBtn').addEventListener('click', newGame);
+  document.getElementById('playAgainBtn').addEventListener('click', newGame);
+
+  document.getElementById('sizeGroup').addEventListener('click', (e) => {
+    const btn = e.target.closest('.size-btn');
+    if (!btn) return;
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    dots = parseInt(btn.dataset.size, 10);
+    newGame();
+  });
+
+  nameInputs.forEach((inp, idx) => {
+    inp.addEventListener('input', () => {
+      updateScoreboard();
+      render();
+    });
+    inp.addEventListener('click', () => inp.select());
+  });
+
+  initialInputs.forEach((inp) => {
+    inp.addEventListener('input', () => {
+      render();
+    });
+    inp.addEventListener('click', () => inp.select());
+  });
+
+  window.addEventListener('resize', render);
+
+  resetOwnerGrids();
+  initState();
+})();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
