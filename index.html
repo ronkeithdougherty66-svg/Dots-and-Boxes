@@ -326,6 +326,131 @@
     font-weight: 600;
     cursor: pointer;
   }
+
+  .online-bar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  .online-link-btn {
+    background: none;
+    border: none;
+    color: var(--graphite);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+
+  .online-panel {
+    width: 100%;
+    max-width: 420px;
+    background: var(--paper);
+    border: 1px solid var(--paper-edge);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 8px;
+  }
+
+  .online-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .online-btn {
+    background: var(--ink-dark);
+    color: var(--paper);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .online-join {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .online-code-input {
+    width: 80px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 7px 6px;
+    border: 1px solid var(--paper-edge);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-dark);
+  }
+
+  .online-status {
+    display: block;
+    font-size: 12px;
+    color: #8a8578;
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  .online-connected {
+    text-align: center;
+  }
+  .online-room-label {
+    font-size: 11px;
+    color: #8a8578;
+    margin: 0 0 2px;
+  }
+  .online-room-code {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 36px;
+    letter-spacing: 4px;
+    margin: 0 0 10px;
+    color: var(--ink-dark);
+  }
+  .online-copy-btn {
+    background: transparent;
+    border: 1px solid var(--paper-edge);
+    color: var(--ink-dark);
+    padding: 7px 14px;
+    border-radius: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .online-you {
+    font-size: 12px;
+    color: var(--graphite);
+    margin: 6px 0 12px;
+  }
+  .online-leave-btn {
+    background: none;
+    border: none;
+    color: #a83a44;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .player-name:read-only, .player-initial:read-only { opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -363,6 +488,28 @@
       <button class="size-btn selected" data-size="11">Full</button>
     </div>
     <button class="new-game-btn" id="newGameBtn">New game</button>
+  </div>
+
+  <div class="online-bar">
+    <button class="online-link-btn" id="onlineToggleBtn">Play online with a partner</button>
+  </div>
+
+  <div class="online-panel" id="onlinePanel" hidden>
+    <div class="online-row" id="onlineChoiceRow">
+      <button class="online-btn" id="createRoomBtn">Create game</button>
+      <div class="online-join">
+        <input class="online-code-input" id="joinCodeInput" placeholder="CODE" maxlength="5">
+        <button class="online-btn" id="joinRoomBtn">Join</button>
+      </div>
+    </div>
+    <div class="online-connected" id="onlineConnected" hidden>
+      <p class="online-room-label">Room code</p>
+      <p class="online-room-code" id="roomCodeDisplay">----</p>
+      <button class="online-copy-btn" id="copyLinkBtn">Copy invite link</button>
+      <p class="online-you" id="onlineYouLabel"></p>
+      <button class="online-leave-btn" id="leaveRoomBtn">Leave online game</button>
+    </div>
+    <span class="online-status" id="onlineStatus"></span>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -441,6 +588,222 @@
       const raw = initialInputs[i].value.trim();
       return (raw || nm[i].charAt(0) || '?').toUpperCase();
     });
+  }
+
+  // ---------- Online multiplayer (Firebase Realtime Database) ----------
+  // Fill in your own Firebase project's web config here (Project settings > General > Your apps).
+  const firebaseConfig = {
+  apiKey: "AIzaSyALBRz3Esej2KVz1kFKWt_r96nYJEaqN9I",
+  authDomain: "dots-game-58063.firebaseapp.com",
+  databaseURL: "https://dots-game-58063-default-rtdb.firebaseio.com",
+  projectId: "dots-game-58063",
+  storageBucket: "dots-game-58063.firebasestorage.app",
+  messagingSenderId: "429182714784",
+  appId: "1:429182714784:web:0411b45967220399a69ac5"
+};
+
+  let onlineMode = false;
+  let myPlayerIndex = null;
+  let roomCode = null;
+  let fbApp = null, fbDb = null, fbRoomRef = null, fbUnsub = null, fbFns = null;
+  let hasAppliedInitialRemote = false;
+  let lastSentMoveId = null;
+  let nameSyncTimer = null;
+
+  const onlineToggleBtn = document.getElementById('onlineToggleBtn');
+  const onlinePanel = document.getElementById('onlinePanel');
+  const onlineStatus = document.getElementById('onlineStatus');
+  const onlineChoiceRow = document.getElementById('onlineChoiceRow');
+  const onlineConnected = document.getElementById('onlineConnected');
+  const createRoomBtn = document.getElementById('createRoomBtn');
+  const joinRoomBtn = document.getElementById('joinRoomBtn');
+  const joinCodeInput = document.getElementById('joinCodeInput');
+  const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+  const copyLinkBtn = document.getElementById('copyLinkBtn');
+  const onlineYouLabel = document.getElementById('onlineYouLabel');
+  const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+
+  async function loadFirebase() {
+    if (fbFns) return fbFns;
+    const appMod = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+    const dbMod = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js');
+    fbApp = appMod.initializeApp(firebaseConfig);
+    fbDb = dbMod.getDatabase(fbApp);
+    fbFns = { ref: dbMod.ref, set: dbMod.set, onValue: dbMod.onValue, get: dbMod.get };
+    return fbFns;
+  }
+
+  function randomRoomCode() {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // skip 0/O/1/I to avoid mixups
+    let code = '';
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  function buildStateSnapshot(moveId) {
+    return {
+      dots,
+      hEdges, vEdges, hEdgeOwners, vEdgeOwners, boxOwner,
+      current, scores, gameOver,
+      names: names(), initials: initials(),
+      moveId
+    };
+  }
+
+  function pushState() {
+    if (!onlineMode || !fbRoomRef || !fbFns) return;
+    const moveId = Date.now() + '-' + Math.random().toString(36).slice(2);
+    lastSentMoveId = moveId;
+    fbFns.set(fbRoomRef, buildStateSnapshot(moveId)).catch(() => {
+      showToast("Couldn't sync — check connection");
+    });
+  }
+
+  function debouncedPushState() {
+    clearTimeout(nameSyncTimer);
+    nameSyncTimer = setTimeout(pushState, 400);
+  }
+
+  function drawnEdgeCount(state) {
+    let n = 0;
+    state.hEdges.forEach((row) => row.forEach((v) => { if (v) n++; }));
+    state.vEdges.forEach((row) => row.forEach((v) => { if (v) n++; }));
+    return n;
+  }
+
+  function syncSizeButtons() {
+    document.querySelectorAll('.size-btn').forEach((b) => {
+      b.classList.toggle('selected', parseInt(b.dataset.size, 10) === dots);
+    });
+  }
+
+  function applyInputLocks() {
+    nameInputs.forEach((inp, i) => { inp.readOnly = onlineMode && i !== myPlayerIndex; });
+    initialInputs.forEach((inp, i) => { inp.readOnly = onlineMode && i !== myPlayerIndex; });
+  }
+
+  function applyRemoteState(data) {
+    if (!data) return;
+
+    // Our own echo coming back from the database — already applied locally, ignore quietly.
+    if (data.moveId && data.moveId === lastSentMoveId) return;
+
+    const wasGameOver = gameOver;
+    const prevScores = scores.slice();
+    const prevDrawn = (hEdges && vEdges) ? drawnEdgeCount({ hEdges, vEdges }) : 0;
+    const newDrawn = drawnEdgeCount(data);
+    const isReset = newDrawn < prevDrawn;
+
+    dots = data.dots;
+    boxesPerSide = dots - 1;
+    hEdges = data.hEdges;
+    vEdges = data.vEdges;
+    hEdgeOwners = data.hEdgeOwners;
+    vEdgeOwners = data.vEdgeOwners;
+    boxOwner = data.boxOwner;
+    current = data.current;
+    scores = data.scores;
+    gameOver = data.gameOver;
+    selectedDot = null;
+
+    if (data.names) {
+      nameInputs.forEach((inp, i) => { if (document.activeElement !== inp) inp.value = data.names[i]; });
+    }
+    if (data.initials) {
+      initialInputs.forEach((inp, i) => { if (document.activeElement !== inp) inp.value = data.initials[i]; });
+    }
+
+    syncSizeButtons();
+
+    if (!hasAppliedInitialRemote || isReset) {
+      hasAppliedInitialRemote = true;
+      overlay.classList.remove('show');
+      updateScoreboard();
+      render();
+      return;
+    }
+
+    updateScoreboard();
+    render();
+
+    const totalGained = (scores[0] + scores[1]) - (prevScores[0] + prevScores[1]);
+    if (totalGained > 0) {
+      playBoxSound(totalGained);
+      if (totalGained > 1) showToast(`+${totalGained} boxes!`);
+    }
+
+    if (!wasGameOver && gameOver) endGame();
+  }
+
+  function subscribeRoom() {
+    if (fbUnsub) fbUnsub();
+    fbUnsub = fbFns.onValue(fbRoomRef, (snapshot) => applyRemoteState(snapshot.val()));
+  }
+
+  function showConnectedUI() {
+    onlineChoiceRow.hidden = true;
+    onlineConnected.hidden = false;
+    onlineStatus.textContent = '';
+    roomCodeDisplay.textContent = roomCode;
+    onlineYouLabel.textContent = `You're ${myPlayerIndex === 0 ? "Player 1 (blue)" : "Player 2 (purple)"}`;
+    applyInputLocks();
+  }
+
+  async function createRoom() {
+    try {
+      onlineStatus.textContent = 'Connecting…';
+      const fns = await loadFirebase();
+      roomCode = randomRoomCode();
+      myPlayerIndex = 0;
+      fbRoomRef = fns.ref(fbDb, `rooms/${roomCode}`);
+      onlineMode = true;
+      hasAppliedInitialRemote = true;
+      subscribeRoom();
+      newGame(); // resets locally and pushes a fresh shared state
+      showConnectedUI();
+    } catch (err) {
+      onlineMode = false;
+      onlineStatus.textContent = "Couldn't connect — check your Firebase setup";
+    }
+  }
+
+  async function joinRoom(code) {
+    code = (code || '').trim().toUpperCase();
+    if (!code) { onlineStatus.textContent = 'Enter a room code'; return; }
+    try {
+      onlineStatus.textContent = 'Connecting…';
+      const fns = await loadFirebase();
+      const testRef = fns.ref(fbDb, `rooms/${code}`);
+      const snap = await fns.get(testRef);
+      if (!snap.exists()) {
+        onlineStatus.textContent = 'No game found with that code';
+        return;
+      }
+      roomCode = code;
+      myPlayerIndex = 1;
+      fbRoomRef = testRef;
+      onlineMode = true;
+      hasAppliedInitialRemote = false;
+      subscribeRoom();
+      showConnectedUI();
+    } catch (err) {
+      onlineMode = false;
+      onlineStatus.textContent = "Couldn't connect — check your Firebase setup";
+    }
+  }
+
+  function leaveRoom() {
+    if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+    onlineMode = false;
+    myPlayerIndex = null;
+    roomCode = null;
+    fbRoomRef = null;
+    hasAppliedInitialRemote = false;
+    onlineConnected.hidden = true;
+    onlineChoiceRow.hidden = false;
+    onlineStatus.textContent = '';
+    applyInputLocks();
+    newGame();
   }
 
   function initState() {
@@ -595,6 +958,10 @@
 
   function onDotTap(r, c) {
     if (gameOver) return;
+    if (onlineMode && current !== myPlayerIndex) {
+      showToast(`Waiting for ${names()[current]}`);
+      return;
+    }
 
     if (!selectedDot) {
       selectedDot = { r, c };
@@ -664,13 +1031,14 @@
       if (completed > 1) showToast(`+${completed} boxes!`);
       if (isBoardFull()) {
         endGame();
-        return;
       }
-      // same player goes again
+      // same player goes again otherwise
     } else {
       current = 1 - current;
       updateScoreboard();
     }
+
+    if (onlineMode) pushState();
   }
 
   function boxComplete(r, c) {
@@ -742,6 +1110,7 @@
   function newGame() {
     resetOwnerGrids();
     initState();
+    if (onlineMode) pushState();
   }
 
   // wire up controls
@@ -761,18 +1130,42 @@
     inp.addEventListener('input', () => {
       updateScoreboard();
       render();
+      if (onlineMode && idx === myPlayerIndex) debouncedPushState();
     });
     inp.addEventListener('click', () => inp.select());
   });
 
-  initialInputs.forEach((inp) => {
+  initialInputs.forEach((inp, idx) => {
     inp.addEventListener('input', () => {
       render();
+      if (onlineMode && idx === myPlayerIndex) debouncedPushState();
     });
     inp.addEventListener('click', () => inp.select());
   });
 
   window.addEventListener('resize', render);
+
+  onlineToggleBtn.addEventListener('click', () => {
+    onlinePanel.hidden = !onlinePanel.hidden;
+  });
+  createRoomBtn.addEventListener('click', createRoom);
+  joinRoomBtn.addEventListener('click', () => joinRoom(joinCodeInput.value));
+  leaveRoomBtn.addEventListener('click', leaveRoom);
+  copyLinkBtn.addEventListener('click', async () => {
+    const link = `${location.origin}${location.pathname}?room=${roomCode}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast('Link copied!');
+    } catch (e) {
+      window.prompt('Copy this link:', link);
+    }
+  });
+
+  const urlRoom = new URLSearchParams(location.search).get('room');
+  if (urlRoom) {
+    onlinePanel.hidden = false;
+    joinCodeInput.value = urlRoom.toUpperCase();
+  }
 
   resetOwnerGrids();
   initState();
