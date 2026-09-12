@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dots-and-boxes-v1';
+const CACHE_NAME = 'dots-and-boxes-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -26,7 +26,25 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const req = event.request;
+
+  // For the page itself, always try the network first so edits show up
+  // right away; fall back to the cached copy only when offline.
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // For static assets (icons, manifest), cache-first is fine — they rarely change.
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(req).then((cached) => cached || fetch(req))
   );
 });

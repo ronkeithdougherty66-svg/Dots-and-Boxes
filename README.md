@@ -85,4 +85,4 @@ Tapping **Leave online game** on either phone disconnects and returns to local p
 
 ## Updating later
 
-If you ask me to tweak the game again, just re-upload the changed file(s) to the same GitHub repo (overwriting `index.html`, for instance) — the home screen icon will pick up changes the next time it's opened with a connection.
+If you ask me to tweak the game again, just re-upload the changed file(s) to the same GitHub repo (overwriting `index.html`, for instance). The app now checks the network for the latest page every time you open it (falling back to the offline copy only if you have no connection), so edits show up the next time you open the app with a connection — no reinstalling needed.
